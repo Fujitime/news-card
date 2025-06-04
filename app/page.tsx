@@ -11,7 +11,28 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Upload, Download, Copy, Share2, Palette, ImageIcon, Moon, Sun, Save, History, Trash2 } from "lucide-react"
+import {
+  Upload,
+  Download,
+  Copy,
+  Share2,
+  Palette,
+  ImageIcon,
+  Moon,
+  Sun,
+  Save,
+  History,
+  Trash2,
+  Highlighter,
+  Type,
+} from "lucide-react"
+
+interface TextHighlight {
+  start: number
+  end: number
+  color: string
+  text: string
+}
 
 interface NewsCardConfig {
   backgroundImage: string | null
@@ -24,6 +45,9 @@ interface NewsCardConfig {
   position: string
   logoUrl: string | null
   overlayOpacity: number
+  headlineHighlights: TextHighlight[]
+  subtitleHighlights: TextHighlight[]
+  highlightColor: string
 }
 
 interface SavedProject {
@@ -59,34 +83,54 @@ const templates = {
     accent: "#059669",
   },
   breaking: {
-    name: "Breaking News",
+    name: "Terkini",
     primaryColor: "#dc2626",
     gradient: ["#b91c1c", "#ea580c"],
     accent: "#dc2626",
   },
 }
 
+const highlightColors = [
+  { name: "Purple", value: "#8b5cf6" },
+  { name: "Pink", value: "#ec4899" },
+  { name: "Blue", value: "#3b82f6" },
+  { name: "Green", value: "#10b981" },
+  { name: "Yellow", value: "#f59e0b" },
+  { name: "Red", value: "#ef4444" },
+]
+
 export default function NewsCardGenerator() {
   const [isDark, setIsDark] = useState(false)
   const [config, setConfig] = useState<NewsCardConfig>({
     backgroundImage: null,
-    headline: "Breaking: Major Tech Breakthrough Announced",
-    subtitle: "Revolutionary AI technology set to transform industries worldwide",
-    template: "news",
-    primaryColor: "#dc2626",
+    headline: "UGM Ciptakan Sistem Inspeksi Mobil Berbasis Blockchain",
+    subtitle:
+      "Teknologi blockchain digunakan untuk meningkatkan transparansi dan keamanan dalam proses inspeksi kendaraan",
+    template: "crypto",
+    primaryColor: "#7c3aed",
     textColor: "#ffffff",
     fontSize: 48,
     position: "bottom",
     logoUrl: null,
     overlayOpacity: 70,
+    headlineHighlights: [{ start: 32, end: 56, color: "#8b5cf6", text: "Mobil Berbasis Blockchain" }],
+    subtitleHighlights: [],
+    highlightColor: "#8b5cf6",
   })
 
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [selectedText, setSelectedText] = useState("")
+  const [selectionStart, setSelectionStart] = useState(0)
+  const [selectionEnd, setSelectionEnd] = useState(0)
+  const [activeTextArea, setActiveTextArea] = useState<"headline" | "subtitle" | null>(null)
+  const [showSubtitleHighlight, setShowSubtitleHighlight] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const headlineRef = useRef<HTMLTextAreaElement>(null)
+  const subtitleRef = useRef<HTMLTextAreaElement>(null)
   const [isDragging, setIsDragging] = useState(false)
 
   // Load saved projects from localStorage on mount
@@ -109,6 +153,95 @@ export default function NewsCardGenerator() {
       document.documentElement.classList.remove("dark")
     }
   }, [isDark])
+
+  // Handle text selection
+  const handleTextSelection = (textArea: "headline" | "subtitle") => {
+    const textarea = textArea === "headline" ? headlineRef.current : subtitleRef.current
+    if (!textarea) return
+
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selectedText = textarea.value.substring(start, end)
+
+    if (selectedText.length > 0) {
+      setSelectedText(selectedText)
+      setSelectionStart(start)
+      setSelectionEnd(end)
+      setActiveTextArea(textArea)
+    }
+  }
+
+  // Add highlight to selected text
+  const addHighlight = () => {
+    if (!selectedText || !activeTextArea) return
+
+    const newHighlight: TextHighlight = {
+      start: selectionStart,
+      end: selectionEnd,
+      color: config.highlightColor,
+      text: selectedText,
+    }
+
+    setConfig((prev) => ({
+      ...prev,
+      [activeTextArea === "headline" ? "headlineHighlights" : "subtitleHighlights"]: [
+        ...prev[activeTextArea === "headline" ? "headlineHighlights" : "subtitleHighlights"],
+        newHighlight,
+      ].sort((a, b) => a.start - b.start),
+    }))
+
+    setSelectedText("")
+    setActiveTextArea(null)
+  }
+
+  // Remove highlight
+  const removeHighlight = (textArea: "headline" | "subtitle", index: number) => {
+    setConfig((prev) => ({
+      ...prev,
+      [textArea === "headline" ? "headlineHighlights" : "subtitleHighlights"]: prev[
+        textArea === "headline" ? "headlineHighlights" : "subtitleHighlights"
+      ].filter((_, i) => i !== index),
+    }))
+  }
+
+  // Render text with highlights for preview
+  const renderHighlightedText = (text: string, highlights: TextHighlight[]) => {
+    if (highlights.length === 0) return text
+
+    const parts = []
+    let lastIndex = 0
+
+    highlights.forEach((highlight, index) => {
+      // Add text before highlight
+      if (highlight.start > lastIndex) {
+        parts.push(text.substring(lastIndex, highlight.start))
+      }
+
+      // Add highlighted text with better styling
+      parts.push(
+        <span
+          key={index}
+          className="px-1 py-0.5 rounded font-semibold"
+          style={{
+            backgroundColor: highlight.color + "80", // Add transparency
+            color: "#ffffff",
+            textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+          }}
+        >
+          {highlight.text}
+        </span>,
+      )
+
+      lastIndex = highlight.end
+    })
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex))
+    }
+
+    return parts
+  }
 
   // Get current template with custom primary color applied
   const getCurrentTemplate = useCallback(() => {
@@ -220,7 +353,7 @@ export default function NewsCardGenerator() {
         ctx.drawImage(logoImg, padding, padding, logoWidth, logoHeight)
       }
 
-      // Draw breaking news badge
+      // Draw terkini news badge
       if (config.template === "breaking") {
         const badgeY = textStartY - 10
         const badgeWidth = 140
@@ -234,7 +367,7 @@ export default function NewsCardGenerator() {
         ctx.fillStyle = "#ffffff"
         ctx.font = "bold 16px Arial, sans-serif"
         ctx.textAlign = "center"
-        ctx.fillText("BREAKING", padding + badgeWidth / 2, badgeY + 24)
+        ctx.fillText("TERKINI", padding + badgeWidth / 2, badgeY + 24)
 
         textStartY += 60 // Add space after badge
       }
@@ -243,7 +376,7 @@ export default function NewsCardGenerator() {
       ctx.textAlign = "left"
       ctx.fillStyle = config.textColor
 
-      // Draw headline with proper scaling
+      // Draw headline with highlights
       const maxWidth = width - padding * 2
       const scaledFontSize = config.fontSize * 1.5 // Scale up for canvas
       const lineHeight = scaledFontSize * 1.1
@@ -254,50 +387,137 @@ export default function NewsCardGenerator() {
       ctx.shadowOffsetX = 3
       ctx.shadowOffsetY = 3
 
-      // Word wrap function
-      const wrapText = (text: string, maxWidth: number) => {
-        const words = text.split(" ")
-        const lines = []
-        let currentLine = words[0]
+      // Function to draw text with highlights
+      const drawTextWithHighlights = (
+        text: string,
+        highlights: TextHighlight[],
+        x: number,
+        y: number,
+        fontSize: number,
+      ) => {
+        if (highlights.length === 0) {
+          // No highlights, draw normally
+          const words = text.split(" ")
+          const lines = []
+          let currentLine = words[0]
 
-        for (let i = 1; i < words.length; i++) {
-          const word = words[i]
-          const width = ctx.measureText(currentLine + " " + word).width
-          if (width < maxWidth) {
-            currentLine += " " + word
-          } else {
-            lines.push(currentLine)
-            currentLine = word
+          for (let i = 1; i < words.length; i++) {
+            const word = words[i]
+            const width = ctx.measureText(currentLine + " " + word).width
+            if (width < maxWidth) {
+              currentLine += " " + word
+            } else {
+              lines.push(currentLine)
+              currentLine = word
+            }
           }
+          lines.push(currentLine)
+
+          lines.forEach((line, index) => {
+            ctx.fillText(line, x, y + index * (fontSize * 1.1))
+          })
+
+          return lines.length * (fontSize * 1.1)
         }
-        lines.push(currentLine)
-        return lines
+
+        // Draw text with highlights
+        let currentY = y
+        const currentX = x
+        let charIndex = 0
+        const lineHeight = fontSize * 1.1
+
+        // Split text into words for wrapping
+        const words = text.split(" ")
+        let currentLine = ""
+        let lineStartIndex = 0
+
+        for (let wordIndex = 0; wordIndex < words.length; wordIndex++) {
+          const word = words[wordIndex]
+          const testLine = currentLine + (currentLine ? " " : "") + word
+          const testWidth = ctx.measureText(testLine).width
+
+          if (testWidth > maxWidth && currentLine) {
+            // Draw current line with highlights
+            drawLineWithHighlights(currentLine, lineStartIndex, currentX, currentY, highlights)
+
+            // Move to next line
+            currentY += lineHeight
+            currentLine = word
+            lineStartIndex = charIndex
+          } else {
+            currentLine = testLine
+          }
+
+          charIndex += word.length + (wordIndex < words.length - 1 ? 1 : 0)
+        }
+
+        // Draw final line
+        if (currentLine) {
+          drawLineWithHighlights(currentLine, lineStartIndex, currentX, currentY, highlights)
+          currentY += lineHeight
+        }
+
+        return currentY - y
+      }
+
+      const drawLineWithHighlights = (
+        line: string,
+        lineStartIndex: number,
+        x: number,
+        y: number,
+        highlights: TextHighlight[],
+      ) => {
+        let currentX = x
+        const charIndex = lineStartIndex
+
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i]
+          const globalIndex = charIndex + i
+
+          // Check if this character is in a highlight
+          const highlight = highlights.find((h) => globalIndex >= h.start && globalIndex < h.end)
+
+          if (highlight) {
+            // Draw highlight background
+            const charWidth = ctx.measureText(char).width
+            ctx.fillStyle = highlight.color + "80"
+            ctx.fillRect(currentX - 2, y - scaledFontSize + 10, charWidth + 4, scaledFontSize + 5)
+
+            // Draw character
+            ctx.fillStyle = "#ffffff"
+            ctx.shadowColor = "rgba(0, 0, 0, 0.8)"
+            ctx.shadowBlur = 4
+            ctx.fillText(char, currentX, y)
+            ctx.shadowColor = "transparent"
+            ctx.shadowBlur = 0
+          } else {
+            // Draw normal character
+            ctx.fillStyle = config.textColor
+            ctx.fillText(char, currentX, y)
+          }
+
+          currentX += ctx.measureText(char).width
+        }
       }
 
       // Draw headline
-      const headlineLines = wrapText(config.headline, maxWidth)
       let currentY = textStartY
+      const headlineHeight = drawTextWithHighlights(
+        config.headline,
+        config.headlineHighlights,
+        padding,
+        currentY,
+        scaledFontSize,
+      )
+      currentY += headlineHeight + 30
 
-      headlineLines.forEach((line, index) => {
-        ctx.fillText(line, padding, currentY + index * lineHeight)
-      })
-
-      currentY += headlineLines.length * lineHeight + 30
-
-      // Draw subtitle with proper scaling
+      // Draw subtitle with highlights
       if (config.subtitle) {
         const subtitleSize = scaledFontSize * 0.45 // Better proportion
-        const subtitleLineHeight = subtitleSize * 1.3
-
         ctx.font = `${subtitleSize}px Arial, sans-serif`
-        ctx.fillStyle = config.textColor + "E6" // 90% opacity
         ctx.shadowBlur = 8
 
-        const subtitleLines = wrapText(config.subtitle, maxWidth)
-
-        subtitleLines.forEach((line, index) => {
-          ctx.fillText(line, padding, currentY + index * subtitleLineHeight)
-        })
+        drawTextWithHighlights(config.subtitle, config.subtitleHighlights, padding, currentY, subtitleSize)
       }
 
       // Draw accent border at bottom
@@ -525,12 +745,251 @@ export default function NewsCardGenerator() {
             <Card className="backdrop-blur-sm bg-white/80 dark:bg-slate-800/80">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  Content & Media
+                  <Type className="w-5 h-5" />
+                  Text Content
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Background Image Upload */}
+                {/* Headline Section with Integrated Highlighting */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="headline" className="text-base font-medium flex items-center gap-2">
+                      <span>Headline</span>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      {selectedText && activeTextArea === "headline" && (
+                        <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">
+                          "{selectedText}"
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <Textarea
+                      ref={headlineRef}
+                      id="headline"
+                      value={config.headline}
+                      onChange={(e) => setConfig((prev) => ({ ...prev, headline: e.target.value }))}
+                      onSelect={() => handleTextSelection("headline")}
+                      placeholder="Enter your news headline..."
+                      className="resize-none text-base pr-12"
+                      rows={3}
+                    />
+
+                    {/* Inline Highlight Controls */}
+                    <div className="absolute top-2 right-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        onClick={() => {
+                          if (selectedText && activeTextArea === "headline") {
+                            addHighlight()
+                          }
+                        }}
+                        disabled={!selectedText || activeTextArea !== "headline"}
+                        title="Highlight selected text"
+                      >
+                        <Highlighter className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Compact Highlight Controls */}
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-slate-600 dark:text-slate-400">Highlight:</Label>
+                      <div className="flex gap-1">
+                        {highlightColors.map((color) => (
+                          <button
+                            key={color.value}
+                            onClick={() => setConfig((prev) => ({ ...prev, highlightColor: color.value }))}
+                            className={`w-6 h-6 rounded-full border-2 transition-all ${
+                              config.highlightColor === color.value
+                                ? "border-slate-400 scale-110"
+                                : "border-slate-200 hover:border-slate-300"
+                            }`}
+                            style={{ backgroundColor: color.value }}
+                            title={color.name}
+                          />
+                        ))}
+                        <Input
+                          type="color"
+                          value={config.highlightColor}
+                          onChange={(e) => setConfig((prev) => ({ ...prev, highlightColor: e.target.value }))}
+                          className="w-6 h-6 p-0 border-2 border-slate-200 rounded-full cursor-pointer"
+                          title="Custom color"
+                        />
+                      </div>
+                    </div>
+
+                    {selectedText && activeTextArea === "headline" && (
+                      <Button onClick={addHighlight} size="sm" className="bg-purple-600 hover:bg-purple-700 text-xs">
+                        Highlight
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Current Highlights */}
+                  {config.headlineHighlights.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {config.headlineHighlights.map((highlight, index) => (
+                        <div
+                          key={index}
+                          className="inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs text-white shadow-sm"
+                          style={{ backgroundColor: highlight.color }}
+                        >
+                          <span className="max-w-[100px] truncate">{highlight.text}</span>
+                          <button
+                            onClick={() => removeHighlight("headline", index)}
+                            className="hover:bg-black/20 rounded-full w-4 h-4 flex items-center justify-center"
+                            title="Remove highlight"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Subtitle Section with Optional Highlighting */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="subtitle" className="text-base font-medium">
+                      Subtitle
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm text-slate-600 dark:text-slate-400">Enable highlighting</Label>
+                      <input
+                        type="checkbox"
+                        checked={showSubtitleHighlight}
+                        onChange={(e) => {
+                          setShowSubtitleHighlight(e.target.checked)
+                          if (!e.target.checked) {
+                            setConfig((prev) => ({ ...prev, subtitleHighlights: [] }))
+                            if (activeTextArea === "subtitle") {
+                              setActiveTextArea(null)
+                              setSelectedText("")
+                            }
+                          }
+                        }}
+                        className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <Textarea
+                      ref={subtitleRef}
+                      id="subtitle"
+                      value={config.subtitle}
+                      onChange={(e) => setConfig((prev) => ({ ...prev, subtitle: e.target.value }))}
+                      onSelect={() => showSubtitleHighlight && handleTextSelection("subtitle")}
+                      placeholder="Enter subtitle or description..."
+                      className="resize-none"
+                      rows={2}
+                    />
+
+                    {/* Inline Highlight Controls for Subtitle */}
+                    {showSubtitleHighlight && (
+                      <div className="absolute top-2 right-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0"
+                          onClick={() => {
+                            if (selectedText && activeTextArea === "subtitle") {
+                              addHighlight()
+                            }
+                          }}
+                          disabled={!selectedText || activeTextArea !== "subtitle"}
+                          title="Highlight selected text"
+                        >
+                          <Highlighter className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Subtitle Highlight Controls */}
+                  {showSubtitleHighlight && (
+                    <>
+                      <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs text-slate-600 dark:text-slate-400">Highlight:</Label>
+                          <div className="flex gap-1">
+                            {highlightColors.map((color) => (
+                              <button
+                                key={color.value}
+                                onClick={() => setConfig((prev) => ({ ...prev, highlightColor: color.value }))}
+                                className={`w-5 h-5 rounded-full border-2 transition-all ${
+                                  config.highlightColor === color.value
+                                    ? "border-slate-400 scale-110"
+                                    : "border-slate-200 hover:border-slate-300"
+                                }`}
+                                style={{ backgroundColor: color.value }}
+                                title={color.name}
+                              />
+                            ))}
+                            <Input
+                              type="color"
+                              value={config.highlightColor}
+                              onChange={(e) => setConfig((prev) => ({ ...prev, highlightColor: e.target.value }))}
+                              className="w-5 h-5 p-0 border-2 border-slate-200 rounded-full cursor-pointer"
+                              title="Custom color"
+                            />
+                          </div>
+                        </div>
+
+                        {selectedText && activeTextArea === "subtitle" && (
+                          <Button
+                            onClick={addHighlight}
+                            size="sm"
+                            className="bg-purple-600 hover:bg-purple-700 text-xs"
+                          >
+                            Highlight
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Current Subtitle Highlights */}
+                      {config.subtitleHighlights.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {config.subtitleHighlights.map((highlight, index) => (
+                            <div
+                              key={index}
+                              className="inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs text-white shadow-sm"
+                              style={{ backgroundColor: highlight.color }}
+                            >
+                              <span className="max-w-[80px] truncate">{highlight.text}</span>
+                              <button
+                                onClick={() => removeHighlight("subtitle", index)}
+                                className="hover:bg-black/20 rounded-full w-3 h-3 flex items-center justify-center"
+                                title="Remove highlight"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Background Image Upload */}
+            <Card className="backdrop-blur-sm bg-white/80 dark:bg-slate-800/80">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="w-5 h-5" />
+                  Media
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label>Background Image</Label>
                   <div
@@ -576,32 +1035,6 @@ export default function NewsCardGenerator() {
                     onChange={handleImageUpload}
                     className="hidden"
                   />
-                </div>
-
-                {/* Text Inputs */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="headline">Headline</Label>
-                    <Textarea
-                      id="headline"
-                      value={config.headline}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, headline: e.target.value }))}
-                      placeholder="Enter your news headline..."
-                      className="resize-none"
-                      rows={2}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="subtitle">Subtitle</Label>
-                    <Textarea
-                      id="subtitle"
-                      value={config.subtitle}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, subtitle: e.target.value }))}
-                      placeholder="Enter subtitle or description..."
-                      className="resize-none"
-                      rows={2}
-                    />
-                  </div>
                 </div>
 
                 {/* Logo Upload */}
@@ -849,7 +1282,7 @@ export default function NewsCardGenerator() {
                               className="text-white px-2 sm:px-3 py-1 text-xs sm:text-sm font-bold uppercase tracking-wide rounded"
                               style={{ backgroundColor: currentTemplate.primaryColor }}
                             >
-                              BREAKING
+                              TERKINI
                             </span>
                           </div>
                         )}
@@ -861,7 +1294,7 @@ export default function NewsCardGenerator() {
                             color: config.textColor,
                           }}
                         >
-                          {config.headline}
+                          {renderHighlightedText(config.headline, config.headlineHighlights)}
                         </h1>
 
                         {config.subtitle && (
@@ -872,7 +1305,7 @@ export default function NewsCardGenerator() {
                               color: config.textColor,
                             }}
                           >
-                            {config.subtitle}
+                            {renderHighlightedText(config.subtitle, config.subtitleHighlights)}
                           </p>
                         )}
                       </div>
